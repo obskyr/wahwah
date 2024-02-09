@@ -48,6 +48,8 @@ module WahWah
           value = instance_variable_get("@#{attr_name}")&.to_i
           instance_variable_set("@#{attr_name}", value)
         end
+
+        load_fully if opened
       ensure
         @file_io.close if opened
       end
@@ -66,6 +68,10 @@ module WahWah
       @images_data.map do |data|
         parse_image_data(data)
       end
+    end
+
+    def load_fully
+      images
     end
 
     private

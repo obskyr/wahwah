@@ -17,6 +17,47 @@ module WahWah
       :sample_rate,
       :lyrics
 
+    # Since OggTag uses lazy loading, it needs the file to stay open for when
+    # lazy-loaded attributes are accessed. Thus, we must avoid Tag::initialize
+    # closing the file for us.
+    def initialize(file)
+      # `Pathname`s respond to :read, but we still want to open them.
+      @opened = if file.respond_to?(:read) && !file.respond_to?(:open)
+        false
+      else
+        file = File.open(file, "rb")
+        true
+      end
+
+      super(file)
+    end
+
+    # Oggs require reading to the end of the file in order to calculate their
+    # duration (as it's not stored in any header or metadata). Thus, if the
+    # file-like object supplied to WahWah is a streaming download, getting the
+    # duration would download the entire audio file, which may not be
+    # desirable. Making it lazy in this manner allows the user to avoid that.
+    def duration
+      return @duration if @duration
+      @duration = parse_duration
+      # Only `duration` uses the file (`bitrate` uses `duration`).
+      @file_io.close if @opened
+      return @duration
+    end
+
+    # Requires duration to calculate, so lazy as well.
+    def bitrate
+      return @bitrate if @bitrate
+      @bitrate = parse_bitrate
+      return @bitrate
+    end
+
+    def load_fully
+      super
+      duration
+      bitrate
+    end
+
     private
 
     def packets
@@ -32,7 +73,7 @@ module WahWah
       return if identification_packet.nil? || comment_packet.nil?
 
       @overhead_packets_size = identification_packet.size + comment_packet.size
-
+      
       @tag = if identification_packet.start_with?("\x01vorbis")
         Ogg::VorbisTag.new(identification_packet, comment_packet)
       elsif identification_packet.start_with?("OpusHead")
@@ -41,8 +82,6 @@ module WahWah
         Ogg::FlacTag.new(identification_packet, comment_packet)
       end
 
-      @duration = parse_duration
-      @bitrate = parse_bitrate
       @bit_depth = parse_bit_depth
     end
 

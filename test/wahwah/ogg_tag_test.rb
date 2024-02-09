@@ -65,4 +65,37 @@ class WahWah::OggTagTest < Minitest::Test
     assert_equal "I'm feeling tragic like I'm Marlon Brando", tag.lyrics
     assert file_io_closed?(tag)
   end
+
+  def test_lazy_duration
+    File.open("test/files/vorbis_tag.ogg", "rb") do |file|
+      tag = WahWah::OggTag.new(file)
+      assert tag.instance_variable_get(:@file_io).pos < file.size
+      assert !tag.instance_variable_get(:@duration)
+      tag.duration
+      assert tag.instance_variable_get(:@file_io).pos == file.size
+      assert tag.instance_variable_get(:@duration)
+    end
+  end
+  
+  def test_lazy_bitrate
+    File.open("test/files/vorbis_tag.ogg", "rb") do |file|
+      tag = WahWah::OggTag.new(file)
+      assert tag.instance_variable_get(:@file_io).pos < file.size
+      assert !tag.instance_variable_get(:@bitrate)
+      tag.bitrate
+      assert tag.instance_variable_get(:@bitrate)
+    end
+  end
+
+  def test_load_fully
+    File.open("test/files/vorbis_tag.ogg", "rb") do |file|
+      tag = WahWah::OggTag.new(file)
+      tag.load_fully
+      assert !file_io_closed?(tag)
+    end
+
+    tag = WahWah::OggTag.new("test/files/vorbis_tag.ogg")
+    tag.load_fully
+    assert file_io_closed?(tag)
+  end
 end
